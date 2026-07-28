@@ -17,8 +17,7 @@ app = FastAPI()
 
 # ---------------- 設定區（請替換成你的金鑰） ----------------
 LINE_CHANNEL_SECRET = "e63b924743da67de49adca55357f23e1"
-LINE_CHANNEL_ACCESS_TOKEN = "aVvMaK1cAo0z45PG4Nv57VStzVuD7B3Sfo93g7NVUvCrrwjwM39vuoyUgGlo8wqwICT5Wo93ACLDDFDcb8+Vn3yOg6QyUpzMM9H3VYl4oK4bqONpBHX/l1r83H2RNLpM2tI5kSYr9V+xoTHTONurKgdB04t89/1O/w1cDnyilFU=
-"
+LINE_CHANNEL_ACCESS_TOKEN = "aVvMaK1cAo0z45PG4Nv57VStzVuD7B3Sfo93g7NVUvCrrwjwM39vuoyUgGlo8wqwICT5Wo93ACLDDFDcb8+Vn3yOg6QyUpzMM9H3VYl4oK4bqONpBHX/l1r83H2RNLpM2tI5kSYr9V+xoTHTONurKgdB04t89/1O/w1cDnyilFU="
 GEMINI_API_KEY = "pip install fastapi uvicorn line-bot-sdk google-api-python-client google-auth-httplib2 google-auth-oauthlib google-generativeai"
 
 # LINE API 初始化
