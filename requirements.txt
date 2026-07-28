@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+line-bot-sdk
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+google-generativeai
