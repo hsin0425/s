@@ -11,7 +11,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 # Gemini API 相關套件
-import google.generativeai as genai
+from google import genai
 
 app = FastAPI()
 
@@ -24,8 +24,7 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # Gemini API 初始化
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Google Calendar API 初始化
 SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -70,9 +69,10 @@ def parse_user_intent(user_text: str):
     使用者輸入："{user_text}"
     """
     
-    response = model.generate_content(prompt)
-    clean_text = response.text.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean_text)
+    response = gemini_client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents=prompt
+)
 
 # ---------------- Google Calendar 操作 ----------------
 def add_calendar_event(summary, start_iso, end_iso):
@@ -140,8 +140,3 @@ def handle_message(event):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-# 請確認這裡是 @app.post("/callback")
-@app.post("/callback")
-async def callback(request: Request):
-    ...
