@@ -74,8 +74,8 @@ def parse_user_intent(user_text: str):
     messages=[{"role": "user", "content": prompt}],
     temperature=0
 )
-clean_text = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-return json.loads(clean_text)
+    clean_text = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+    return json.loads(clean_text)
 
 # ---------------- Google Calendar 操作 ----------------
 def add_calendar_event(summary, start_iso, end_iso):
