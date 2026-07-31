@@ -69,10 +69,13 @@ def parse_user_intent(user_text: str):
     使用者輸入："{user_text}"
     """
     
-    response = gemini_client.models.generate_content(
-    model="gemini-2.5-flash",
-    contents=prompt
+    response = groq_client.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=[{"role": "user", "content": prompt}],
+    temperature=0
 )
+clean_text = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+return json.loads(clean_text)
 
 # ---------------- Google Calendar 操作 ----------------
 def add_calendar_event(summary, start_iso, end_iso):
