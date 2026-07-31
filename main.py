@@ -35,7 +35,7 @@ credentials = service_account.Credentials.from_service_account_file(
 )
 calendar_service = build('calendar', 'v3', credentials=credentials)
 # 如果是用次要日曆，這裡填入該日曆的 ID；預設用 'primary'（但需確定服務帳號已獲授權）
-CALENDAR_ID = 'Hoshi@gmail.com' 
+CALENDAR_ID = 'primary' 
 
 # ---------------- 節次對照表 ----------------
 PERIOD_TIMES = {
