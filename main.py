@@ -10,21 +10,21 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-# Gemini API 相關套件
-from google import genai
+# Groq API 相關套件
+from groq import Groq
 
 app = FastAPI()
 
 # ---------------- 設定區（請替換成你的金鑰） ----------------
 LINE_CHANNEL_SECRET = "e63b924743da67de49adca55357f23e1"
 LINE_CHANNEL_ACCESS_TOKEN = "aVvMaK1cAo0z45PG4Nv57VStzVuD7B3Sfo93g7NVUvCrrwjwM39vuoyUgGlo8wqwICT5Wo93ACLDDFDcb8+Vn3yOg6QyUpzMM9H3VYl4oK4bqONpBHX/l1r83H2RNLpM2tI5kSYr9V+xoTHTONurKgdB04t89/1O/w1cDnyilFU="
-GEMINI_API_KEY = "AQ.Ab8RN6Lu5hsf9FU6gCsoikvqUS-vHxkoNPIZ_q2LELbq1mVZAg"
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 # LINE API 初始化
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# Gemini API 初始化
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+# Groq API 初始化
+groq_client = Groq(api_key=GROQ_API_KEY)
 
 # Google Calendar API 初始化
 SCOPES = ['https://www.googleapis.com/auth/calendar']
