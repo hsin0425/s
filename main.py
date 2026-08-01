@@ -22,6 +22,7 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 # LINE API 初始化
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
+pending_actions = {}  # 記錄每個使用者「正在等待選擇要刪哪筆」的候選清單
 
 # Groq API 初始化
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -52,28 +53,40 @@ PERIOD_TIMES = {
 # ---------------- 核心邏輯：AI 解析 ----------------
 def parse_user_intent(user_text: str):
     today_str = datetime.now().strftime("%Y-%m-%d")
-    
+    current_year = datetime.now().year
+
     prompt = f"""
-    今天是 {today_str}。請分析使用者的輸入，判斷他是要「新增行程 (add)」還是「查詢行程 (query)」。
-    如果使用者講到「第幾節」，請參考節次時間對照：
+    今天是 {today_str}。使用者輸入的格式通常是「日期 時間 事件」，例如：
+    8/5 14:00 拿包裹
+    或用「第幾節」表示時間，例如：
+    5/10 第3節 機動學
     第1節: 08:10-09:00, 第2節: 09:10-10:00, 第3節: 10:10-11:00, 第4節: 11:10-12:00
     第5節: 13:10-14:00, 第6節: 14:10-15:00, 第7節: 15:10-16:00, 第8節: 16:10-17:00
 
-    請嚴格只輸出 JSON 格式，不要加任何 Markdown 標記，格式如下：
+    如果使用者沒寫年份，預設是 {current_year} 年。
+
+    請判斷使用者是「新增行程 (add)」、「查詢行程 (query)」還是「刪除行程 (delete)」。
+    刪除的輸入範例：刪除8/5、刪除8/5拿包裹、取消8/5的行程
+
+    請嚴格只輸出以下三種 JSON 格式之一，不要加任何 Markdown 標記：
+
     新增範例：
-    {{"action": "add", "summary": "機動學", "start_time": "2026-05-10T10:10:00+08:00", "end_time": "2026-05-10T11:00:00+08:00"}}
-    
+    {{"action": "add", "summary": "拿包裹", "start_time": "2026-08-05T14:00:00+08:00", "end_time": "2026-08-05T15:00:00+08:00"}}
+
     查詢範例：
-    {{"action": "query", "target_date": "2026-05-10"}}
+    {{"action": "query", "target_date": "2026-08-05"}}
+
+    刪除範例（keyword 沒有指定就填 null）：
+    {{"action": "delete", "target_date": "2026-08-05", "keyword": "拿包裹"}}
 
     使用者輸入："{user_text}"
     """
-    
+
     response = groq_client.chat.completions.create(
-    model="llama-3.3-70b-versatile",
-    messages=[{"role": "user", "content": prompt}],
-    temperature=0
-)
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
     clean_text = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
     return json.loads(clean_text)
 
@@ -90,6 +103,22 @@ def add_calendar_event(summary, start_iso, end_iso):
 def query_calendar_events(target_date_str):
     start_time = f"{target_date_str}T00:00:00Z"
     end_time = f"{target_date_str}T23:59:59Z"
+def find_calendar_events(target_date_str, keyword=None):
+    start_time = f"{target_date_str}T00:00:00Z"
+    end_time = f"{target_date_str}T23:59:59Z"
+
+    events_result = calendar_service.events().list(
+        calendarId=CALENDAR_ID, timeMin=start_time, timeMax=end_time,
+        singleEvents=True, orderBy='startTime'
+    ).execute()
+    events = events_result.get('items', [])
+
+    if keyword:
+        events = [e for e in events if keyword in e.get('summary', '')]
+    return events
+
+def delete_calendar_event(event_id):
+    calendar_service.events().delete(calendarId=CALENDAR_ID, eventId=event_id).execute()
     
     events_result = calendar_service.events().list(
         calendarId=CALENDAR_ID, timeMin=start_time, timeMax=end_time,
@@ -122,23 +151,65 @@ async def callback(request: Request):
     return "OK"
 
 @handler.add(MessageEvent, message=TextMessage)
+@handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_msg = event.message.text
+    user_id = event.source.user_id
+    user_msg = event.message.text.strip()
+
     try:
+        # 如果這位使用者上一輪正在等待「選擇要刪哪一筆」
+        if user_id in pending_actions:
+            candidates = pending_actions[user_id]
+            if user_msg in ["全部", "all"]:
+                for ev in candidates:
+                    delete_calendar_event(ev["id"])
+                reply_text = f"已刪除全部 {len(candidates)} 筆行程！"
+                del pending_actions[user_id]
+            elif user_msg.isdigit() and 1 <= int(user_msg) <= len(candidates):
+                ev = candidates[int(user_msg) - 1]
+                delete_calendar_event(ev["id"])
+                reply_text = f"已刪除：{ev['summary']}"
+                del pending_actions[user_id]
+            else:
+                reply_text = "請回覆「全部」，或行程前面的數字編號喔！"
+
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+            return
+
         parsed = parse_user_intent(user_msg)
+
         if parsed["action"] == "add":
             reply_text = add_calendar_event(parsed["summary"], parsed["start_time"], parsed["end_time"])
+
         elif parsed["action"] == "query":
             reply_text = query_calendar_events(parsed["target_date"])
+
+        elif parsed["action"] == "delete":
+            events = find_calendar_events(parsed["target_date"], parsed.get("keyword"))
+            if not events:
+                reply_text = f"{parsed['target_date']} 沒有找到符合的行程喔！"
+            elif len(events) == 1:
+                delete_calendar_event(events[0]["id"])
+                reply_text = f"已刪除：{events[0].get('summary', '無標題')}"
+            else:
+                lines = [f"{parsed['target_date']} 有多筆行程，回覆數字刪除其中一筆，或回覆「全部」刪除全部："]
+                candidates = []
+                for i, ev in enumerate(events, 1):
+                    start = ev["start"].get("dateTime", ev["start"].get("date"))
+                    time_str = start[11:16] if "T" in start else "整天"
+                    summary = ev.get("summary", "無標題")
+                    lines.append(f"{i}. {time_str} {summary}")
+                    candidates.append({"id": ev["id"], "summary": summary})
+                pending_actions[user_id] = candidates
+                reply_text = "\n".join(lines)
+
         else:
             reply_text = "抱歉，我聽不懂這個指令，請再試一次！"
+
     except Exception as e:
         reply_text = f"處理時發生錯誤：{str(e)}"
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_text)
-    )
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
 if __name__ == "__main__":
     import uvicorn
